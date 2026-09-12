@@ -20,7 +20,7 @@ BRIEFING_DIR = Path("briefings")
 SCRIPTS_DIR = Path("scripts")
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
 KAGI_API_KEY = os.getenv("KAGI_API_KEY")
-KAGI_API_URL = "https://api.kagi.com/v1/search"
+KAGI_API_URL = "https://kagi.com/api/v1/search"
 
 # News sources - Kagi will search for these
 NEWS_SOURCES = {
