@@ -192,7 +192,7 @@ def generate_rss_feed():
         
         item = ET.SubElement(channel, "item")
         ET.SubElement(item, "title").text = f"Regulatory Briefing - {date_str}"
-        ET.SubElement(item, "link").text = f"https://github.com/YOUR_USERNAME/regulatory-briefing/blob/main/briefings/{briefing_file.name}"
+        ET.SubElement(item, "link").text = f"https://github.com/filimentation/regulatory-briefing/blob/main/briefings/{briefing_file.name}"
         ET.SubElement(item, "description").text = content[:500] + "..."  # First 500 chars
         ET.SubElement(item, "pubDate").text = datetime.strptime(date_str, "%Y-%m-%d").strftime("%a, %d %b %Y 06:00:00 +0000")
         ET.SubElement(item, "guid").text = f"briefing-{date_str}"
