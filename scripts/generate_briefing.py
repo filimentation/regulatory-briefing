@@ -9,7 +9,6 @@ Outputs markdown file and updates RSS feed
 import os
 import sys
 import json
-import feedparser
 import requests
 from datetime import datetime, timedelta
 from anthropic import Anthropic
@@ -19,199 +18,120 @@ import xml.etree.ElementTree as ET
 # Configuration
 BRIEFING_DIR = Path("briefings")
 SCRIPTS_DIR = Path("scripts")
-API_KEY = os.getenv("ANTHROPIC_API_KEY")
+ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
+KAGI_API_KEY = os.getenv("KAGI_API_KEY")
+KAGI_API_URL = "https://api.kagi.com/v1/search"
 
-# News sources (RSS only)
+# News sources - Kagi will search for these
 NEWS_SOURCES = {
     "CFPB": {
-        "url": "https://www.consumerfinance.gov/about-us/newsroom/feed/",
+        "query": "site:consumerfinance.gov news",
         "name": "Consumer Financial Protection Bureau"
     },
     "FDIC": {
-        "url": "https://www.fdic.gov/news/rss/news-releases.xml",
+        "query": "site:fdic.gov news",
         "name": "Federal Deposit Insurance Corporation"
     },
     "Federal Reserve": {
-        "url": "https://www.federalreserve.gov/feeds/news/rss_all.xml",
-        "name": "Board of Governors of the Federal Reserve"
+        "query": "site:federalreserve.gov news",
+        "name": "Federal Reserve"
+    },
+    "American Banker": {
+        "query": "site:americanbanker.com news",
+        "name": "American Banker"
     }
 }
 
-def fetch_news(max_articles=15, hours_back=24):
-    """Fetch recent news from all sources"""
+def fetch_news_kagi(max_articles=15, hours_back=24):
+    """Fetch recent news from all sources using Kagi API"""
     all_articles = []
     cutoff_time = datetime.utcnow() - timedelta(hours=hours_back)
     
+    if not KAGI_API_KEY:
+        print("ERROR: KAGI_API_KEY environment variable not set", file=sys.stderr)
+        return []
+    
+    headers = {
+        "Authorization": f"Bot {KAGI_API_KEY}",
+        "User-Agent": "Banking Regulatory Briefing"
+    }
+    
     for source_name, source_config in NEWS_SOURCES.items():
         try:
-            print(f"  Fetching from {source_name}...", file=sys.stderr)
-            feed = feedparser.parse(source_config["url"])
+            print(f"  Searching {source_name}...", file=sys.stderr)
             
-            # Debug: Check if feed loaded
-            if not feed.entries:
-                print(f"    ⚠️  No entries found in {source_name} feed", file=sys.stderr)
+            # Build Kagi search query
+            query = source_config["query"]
+            
+            params = {
+                "q": query,
+                "limit": 10,  # Get top 10 results per source
+                "format": "json"
+            }
+            
+            response = requests.get(KAGI_API_URL, headers=headers, params=params, timeout=10)
+            response.raise_for_status()
+            
+            results = response.json()
+            
+            if "data" not in results or "results" not in results["data"]:
+                print(f"    ⚠️  No results found", file=sys.stderr)
                 continue
             
-            print(f"    ✓ Found {len(feed.entries)} entries", file=sys.stderr)
+            search_results = results["data"]["results"]
+            print(f"    ✓ Found {len(search_results)} results", file=sys.stderr)
             
-            for entry in feed.entries[:5]:  # Grab top 5 from each source
-                # Parse publish time
-                pub_time = None
-                if hasattr(entry, 'published_parsed') and entry.published_parsed:
-                    pub_time = datetime(*entry.published_parsed[:6])
+            for result in search_results[:5]:  # Take top 5 from each source
+                try:
+                    headline = result.get("title", "No title")
+                    url = result.get("url", "")
+                    summary = result.get("snippet", "")
+                    
+                    # Try to extract publish date from result metadata
+                    pub_time = datetime.utcnow()  # Default to now
+                    
+                    # Kagi includes "published" field if available
+                    if "published" in result:
+                        try:
+                            pub_time = datetime.fromisoformat(
+                                result["published"].replace("Z", "+00:00")
+                            )
+                        except:
+                            pass
+                    
+                    # Skip very old articles
+                    if pub_time < cutoff_time:
+                        print(f"    Skipping old: {headline[:50]}", file=sys.stderr)
+                        continue
+                    
+                    if not url or not headline:
+                        continue
+                    
+                    article = {
+                        "source": source_name,
+                        "headline": headline[:200],
+                        "summary": summary[:300] if summary else headline[:150],
+                        "url": url,
+                        "published": pub_time.isoformat(),
+                        "description": source_config["name"]
+                    }
+                    all_articles.append(article)
+                    print(f"    ✓ {headline[:60]}...", file=sys.stderr)
                 
-                # Skip if older than cutoff (but be lenient with old articles if feed is small)
-                if pub_time and pub_time < cutoff_time:
-                    print(f"    Skipping old article: {entry.get('title', 'No title')[:50]}", file=sys.stderr)
+                except Exception as e:
+                    print(f"    Error parsing result: {e}", file=sys.stderr)
                     continue
-                
-                article = {
-                    "source": source_name,
-                    "headline": entry.get("title", "No title"),
-                    "summary": entry.get("summary", ""),
-                    "url": entry.get("link", ""),
-                    "published": pub_time.isoformat() if pub_time else datetime.utcnow().isoformat(),
-                    "description": source_config["name"]
-                }
-                all_articles.append(article)
         
         except Exception as e:
-            print(f"  ❌ Error fetching from {source_name}: {e}", file=sys.stderr)
+            print(f"  ❌ Error querying {source_name}: {e}", file=sys.stderr)
             continue
     
     # Sort by publish time (newest first)
     all_articles.sort(key=lambda x: x["published"], reverse=True)
     
-    print(f"\n  Total articles collected: {len(all_articles)}", file=sys.stderr)
-    
-    # Fallback: If we got nothing, return sample data (for testing)
-    if not all_articles:
-        print("  📝 Using sample data for testing...", file=sys.stderr)
-        all_articles = [
-            {
-                "source": "CFPB",
-                "headline": "CFPB Issues New Guidance on Bank Account Fees",
-                "summary": "The Consumer Financial Protection Bureau released updated guidelines on how banks can charge account maintenance and overdraft fees.",
-                "url": "https://www.consumerfinance.gov/",
-                "published": datetime.utcnow().isoformat(),
-                "description": "Consumer Financial Protection Bureau"
-            },
-            {
-                "source": "FDIC",
-                "headline": "FDIC Releases Cybersecurity Best Practices",
-                "summary": "The Federal Deposit Insurance Corporation updated its cybersecurity recommendations for member institutions.",
-                "url": "https://www.fdic.gov/",
-                "published": (datetime.utcnow() - timedelta(hours=2)).isoformat(),
-                "description": "Federal Deposit Insurance Corporation"
-            }
-        ]
+    print(f"\n  Total articles found: {len(all_articles)}", file=sys.stderr)
     
     return all_articles[:max_articles]
-
-def fetch_american_banker(hours_back=24):
-    """Scrape American Banker main page for recent news"""
-    articles = []
-    cutoff_time = datetime.utcnow() - timedelta(hours=hours_back)
-    
-    try:
-        from bs4 import BeautifulSoup
-        
-        print(f"  Fetching from American Banker...", file=sys.stderr)
-        headers = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
-        }
-        response = requests.get("https://www.americanbanker.com/news", timeout=10, headers=headers)
-        response.raise_for_status()
-        
-        soup = BeautifulSoup(response.text, 'html.parser')
-        
-        # Find all article links - try multiple selectors
-        article_links = soup.find_all('a', {'data-test': 'article-link'})
-        if not article_links:
-            article_links = soup.find_all('a', class_='article-link')
-        if not article_links:
-            # Broader search for links that look like article URLs
-            article_links = [a for a in soup.find_all('a') 
-                           if a.get('href', '').startswith('/news/') 
-                           and a.get_text(strip=True)]
-        
-        print(f"    Found {len(article_links)} potential articles", file=sys.stderr)
-        
-        for link in article_links[:20]:  # Check top 20
-            try:
-                url = link.get('href', '')
-                headline = link.get_text(strip=True)
-                
-                # Skip if missing critical info
-                if not url or not headline or len(headline) < 5:
-                    continue
-                
-                # Make absolute URL
-                if url.startswith('/'):
-                    url = "https://www.americanbanker.com" + url
-                elif not url.startswith('http'):
-                    url = "https://www.americanbanker.com/" + url
-                
-                # Try to find publish date near the link
-                pub_time = datetime.utcnow()  # Default to now
-                
-                # Look for time element near the article link
-                parent = link.find_parent(['article', 'li', 'div'])
-                if parent:
-                    time_elem = parent.find('time')
-                    if time_elem:
-                        datetime_attr = time_elem.get('datetime')
-                        if datetime_attr:
-                            try:
-                                pub_time = datetime.fromisoformat(datetime_attr.replace('Z', '+00:00'))
-                            except:
-                                pass
-                    
-                    # Also try to find text like "Sep 12, 2024"
-                    if pub_time == datetime.utcnow():
-                        text = parent.get_text()
-                        # Look for date patterns
-                        import re
-                        date_match = re.search(r'(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+\d{1,2},?\s+\d{4}', text)
-                        if date_match:
-                            try:
-                                pub_time = datetime.strptime(date_match.group(), "%b %d, %Y")
-                            except:
-                                pass
-                
-                # Skip if article is older than cutoff
-                if pub_time < cutoff_time:
-                    print(f"    Skipping old: {headline[:50]} ({pub_time})", file=sys.stderr)
-                    continue
-                
-                article = {
-                    "source": "American Banker",
-                    "headline": headline[:200],
-                    "summary": f"Article from American Banker: {headline[:150]}",
-                    "url": url,
-                    "published": pub_time.isoformat(),
-                    "description": "American Banker"
-                }
-                articles.append(article)
-                print(f"    ✓ Captured: {headline[:60]}...", file=sys.stderr)
-            
-            except Exception as e:
-                print(f"    Error parsing article: {e}", file=sys.stderr)
-                continue
-        
-        if articles:
-            print(f"    ✓ Found {len(articles)} recent articles", file=sys.stderr)
-        else:
-            print(f"    ⚠️  No recent articles found", file=sys.stderr)
-        
-        return articles
-    
-    except ImportError:
-        print(f"  ❌ BeautifulSoup not installed. Add to requirements.txt", file=sys.stderr)
-        return []
-    except Exception as e:
-        print(f"  ❌ Error scraping American Banker: {e}", file=sys.stderr)
-        return []
 
 def generate_eli15_summary(article):
     """Use Claude API to generate ELI15 summary"""
@@ -341,28 +261,22 @@ def generate_rss_feed():
 
 def main():
     """Main execution"""
-    if not API_KEY:
+    if not ANTHROPIC_API_KEY:
         print("ERROR: ANTHROPIC_API_KEY environment variable not set", file=sys.stderr)
         sys.exit(1)
     
-    print("🔄 Fetching regulatory news...")
+    if not KAGI_API_KEY:
+        print("ERROR: KAGI_API_KEY environment variable not set", file=sys.stderr)
+        sys.exit(1)
     
-    # Fetch from RSS feeds
-    articles = fetch_news(max_articles=12)
-    
-    # Fetch from American Banker (web scraping)
-    ab_articles = fetch_american_banker(hours_back=24)
-    articles.extend(ab_articles)
-    
-    # Re-sort by publish time
-    articles.sort(key=lambda x: x["published"], reverse=True)
-    articles = articles[:12]  # Keep top 12 total
+    print("🔄 Fetching regulatory news via Kagi...")
+    articles = fetch_news_kagi(max_articles=12)
     
     if not articles:
         print("⚠️  No articles found", file=sys.stderr)
         sys.exit(1)
     
-    print(f"✓ Found {len(articles)} articles total")
+    print(f"✓ Found {len(articles)} articles")
     
     print("🤖 Generating ELI15 summaries with Claude...")
     summaries = []
