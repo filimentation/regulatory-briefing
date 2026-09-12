@@ -52,8 +52,8 @@ def fetch_news_kagi(max_articles=15, hours_back=24):
         return []
     
     headers = {
-        "Authorization": f"Bot {KAGI_API_KEY}",
-        "User-Agent": "Banking Regulatory Briefing"
+        "Authorization": f"Bearer {KAGI_API_KEY}",
+        "Content-Type": "application/json"
     }
     
     for source_name, source_config in NEWS_SOURCES.items():
@@ -63,13 +63,12 @@ def fetch_news_kagi(max_articles=15, hours_back=24):
             # Build Kagi search query
             query = source_config["query"]
             
-            params = {
-                "q": query,
-                "limit": 10,  # Get top 10 results per source
-                "format": "json"
+            payload = {
+                "query": query,
+                "workflow": "news"
             }
             
-            response = requests.get(KAGI_API_URL, headers=headers, params=params, timeout=10)
+            response = requests.post(KAGI_API_URL, headers=headers, json=payload, timeout=10)
             response.raise_for_status()
             
             results = response.json()
