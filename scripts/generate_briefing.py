@@ -21,7 +21,7 @@ BRIEFING_DIR = Path("briefings")
 SCRIPTS_DIR = Path("scripts")
 API_KEY = os.getenv("ANTHROPIC_API_KEY")
 
-# News sources
+# News sources (RSS only)
 NEWS_SOURCES = {
     "CFPB": {
         "url": "https://www.consumerfinance.gov/about-us/newsroom/feed/",
@@ -34,10 +34,6 @@ NEWS_SOURCES = {
     "Federal Reserve": {
         "url": "https://www.federalreserve.gov/feeds/news/rss_all.xml",
         "name": "Board of Governors of the Federal Reserve"
-    },
-    "American Banker": {
-        "url": "https://feeds.americanbanker.com/americanbanker/news",
-        "name": "American Banker"
     }
 }
 
@@ -111,6 +107,102 @@ def fetch_news(max_articles=15, hours_back=24):
         ]
     
     return all_articles[:max_articles]
+
+def fetch_american_banker(hours_back=24):
+    """Scrape American Banker main page for recent news"""
+    articles = []
+    cutoff_time = datetime.utcnow() - timedelta(hours=hours_back)
+    
+    try:
+        print(f"  Fetching from American Banker...", file=sys.stderr)
+        response = requests.get("https://www.americanbanker.com", timeout=10)
+        response.raise_for_status()
+        
+        from html.parser import HTMLParser
+        
+        class ArticleParser(HTMLParser):
+            def __init__(self):
+                super().__init__()
+                self.articles = []
+                self.current_article = None
+                self.in_article = False
+                self.in_link = False
+                
+            def handle_starttag(self, tag, attrs):
+                attrs_dict = dict(attrs)
+                
+                # Look for article containers
+                if tag == "article" or (tag == "div" and "class" in attrs_dict and "article" in attrs_dict["class"].lower()):
+                    self.in_article = True
+                    self.current_article = {"headline": "", "url": "", "published": ""}
+                
+                # Look for links within articles
+                if self.in_article and tag == "a" and "href" in attrs_dict:
+                    self.in_link = True
+                    self.current_article["url"] = attrs_dict["href"]
+                
+                # Look for time/date info
+                if self.in_article and tag == "time" and "datetime" in attrs_dict:
+                    self.current_article["published"] = attrs_dict["datetime"]
+            
+            def handle_data(self, data):
+                if self.in_article and self.in_link:
+                    self.current_article["headline"] += data.strip()
+            
+            def handle_endtag(self, tag):
+                if tag == "a" and self.in_link:
+                    self.in_link = False
+                elif tag == "article" or (tag == "div" and self.in_article):
+                    if self.current_article and self.current_article["headline"] and self.current_article["url"]:
+                        self.articles.append(self.current_article)
+                    self.in_article = False
+                    self.current_article = None
+        
+        parser = ArticleParser()
+        parser.feed(response.text)
+        
+        # Filter by date and format
+        for article_data in parser.articles[:10]:  # Top 10 articles
+            try:
+                if article_data["published"]:
+                    pub_time = datetime.fromisoformat(article_data["published"].replace("Z", "+00:00"))
+                else:
+                    pub_time = datetime.utcnow()
+                
+                # Skip old articles
+                if pub_time < cutoff_time:
+                    continue
+                
+                # Ensure URL is absolute
+                if article_data["url"].startswith("/"):
+                    article_data["url"] = "https://www.americanbanker.com" + article_data["url"]
+                elif not article_data["url"].startswith("http"):
+                    article_data["url"] = "https://www.americanbanker.com/" + article_data["url"]
+                
+                article = {
+                    "source": "American Banker",
+                    "headline": article_data["headline"][:150],
+                    "summary": f"Article from American Banker - {article_data['headline'][:100]}",
+                    "url": article_data["url"],
+                    "published": pub_time.isoformat(),
+                    "description": "American Banker"
+                }
+                articles.append(article)
+            
+            except Exception as e:
+                print(f"    Error parsing American Banker article: {e}", file=sys.stderr)
+                continue
+        
+        if articles:
+            print(f"    ✓ Found {len(articles)} articles", file=sys.stderr)
+        else:
+            print(f"    ⚠️  No recent articles found", file=sys.stderr)
+        
+        return articles
+    
+    except Exception as e:
+        print(f"  ❌ Error scraping American Banker: {e}", file=sys.stderr)
+        return []
 
 def generate_eli15_summary(article):
     """Use Claude API to generate ELI15 summary"""
@@ -245,13 +337,23 @@ def main():
         sys.exit(1)
     
     print("🔄 Fetching regulatory news...")
+    
+    # Fetch from RSS feeds
     articles = fetch_news(max_articles=12)
+    
+    # Fetch from American Banker (web scraping)
+    ab_articles = fetch_american_banker(hours_back=24)
+    articles.extend(ab_articles)
+    
+    # Re-sort by publish time
+    articles.sort(key=lambda x: x["published"], reverse=True)
+    articles = articles[:12]  # Keep top 12 total
     
     if not articles:
         print("⚠️  No articles found", file=sys.stderr)
         sys.exit(1)
     
-    print(f"✓ Found {len(articles)} articles")
+    print(f"✓ Found {len(articles)} articles total")
     
     print("🤖 Generating ELI15 summaries with Claude...")
     summaries = []
