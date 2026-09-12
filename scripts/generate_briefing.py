@@ -114,92 +114,101 @@ def fetch_american_banker(hours_back=24):
     cutoff_time = datetime.utcnow() - timedelta(hours=hours_back)
     
     try:
+        from bs4 import BeautifulSoup
+        
         print(f"  Fetching from American Banker...", file=sys.stderr)
-        response = requests.get("https://www.americanbanker.com", timeout=10)
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+        }
+        response = requests.get("https://www.americanbanker.com/news", timeout=10, headers=headers)
         response.raise_for_status()
         
-        from html.parser import HTMLParser
+        soup = BeautifulSoup(response.text, 'html.parser')
         
-        class ArticleParser(HTMLParser):
-            def __init__(self):
-                super().__init__()
-                self.articles = []
-                self.current_article = None
-                self.in_article = False
-                self.in_link = False
-                
-            def handle_starttag(self, tag, attrs):
-                attrs_dict = dict(attrs)
-                
-                # Look for article containers
-                if tag == "article" or (tag == "div" and "class" in attrs_dict and "article" in attrs_dict["class"].lower()):
-                    self.in_article = True
-                    self.current_article = {"headline": "", "url": "", "published": ""}
-                
-                # Look for links within articles
-                if self.in_article and tag == "a" and "href" in attrs_dict:
-                    self.in_link = True
-                    self.current_article["url"] = attrs_dict["href"]
-                
-                # Look for time/date info
-                if self.in_article and tag == "time" and "datetime" in attrs_dict:
-                    self.current_article["published"] = attrs_dict["datetime"]
-            
-            def handle_data(self, data):
-                if self.in_article and self.in_link:
-                    self.current_article["headline"] += data.strip()
-            
-            def handle_endtag(self, tag):
-                if tag == "a" and self.in_link:
-                    self.in_link = False
-                elif tag == "article" or (tag == "div" and self.in_article):
-                    if self.current_article and self.current_article["headline"] and self.current_article["url"]:
-                        self.articles.append(self.current_article)
-                    self.in_article = False
-                    self.current_article = None
+        # Find all article links - try multiple selectors
+        article_links = soup.find_all('a', {'data-test': 'article-link'})
+        if not article_links:
+            article_links = soup.find_all('a', class_='article-link')
+        if not article_links:
+            # Broader search for links that look like article URLs
+            article_links = [a for a in soup.find_all('a') 
+                           if a.get('href', '').startswith('/news/') 
+                           and a.get_text(strip=True)]
         
-        parser = ArticleParser()
-        parser.feed(response.text)
+        print(f"    Found {len(article_links)} potential articles", file=sys.stderr)
         
-        # Filter by date and format
-        for article_data in parser.articles[:10]:  # Top 10 articles
+        for link in article_links[:20]:  # Check top 20
             try:
-                if article_data["published"]:
-                    pub_time = datetime.fromisoformat(article_data["published"].replace("Z", "+00:00"))
-                else:
-                    pub_time = datetime.utcnow()
+                url = link.get('href', '')
+                headline = link.get_text(strip=True)
                 
-                # Skip old articles
-                if pub_time < cutoff_time:
+                # Skip if missing critical info
+                if not url or not headline or len(headline) < 5:
                     continue
                 
-                # Ensure URL is absolute
-                if article_data["url"].startswith("/"):
-                    article_data["url"] = "https://www.americanbanker.com" + article_data["url"]
-                elif not article_data["url"].startswith("http"):
-                    article_data["url"] = "https://www.americanbanker.com/" + article_data["url"]
+                # Make absolute URL
+                if url.startswith('/'):
+                    url = "https://www.americanbanker.com" + url
+                elif not url.startswith('http'):
+                    url = "https://www.americanbanker.com/" + url
+                
+                # Try to find publish date near the link
+                pub_time = datetime.utcnow()  # Default to now
+                
+                # Look for time element near the article link
+                parent = link.find_parent(['article', 'li', 'div'])
+                if parent:
+                    time_elem = parent.find('time')
+                    if time_elem:
+                        datetime_attr = time_elem.get('datetime')
+                        if datetime_attr:
+                            try:
+                                pub_time = datetime.fromisoformat(datetime_attr.replace('Z', '+00:00'))
+                            except:
+                                pass
+                    
+                    # Also try to find text like "Sep 12, 2024"
+                    if pub_time == datetime.utcnow():
+                        text = parent.get_text()
+                        # Look for date patterns
+                        import re
+                        date_match = re.search(r'(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+\d{1,2},?\s+\d{4}', text)
+                        if date_match:
+                            try:
+                                pub_time = datetime.strptime(date_match.group(), "%b %d, %Y")
+                            except:
+                                pass
+                
+                # Skip if article is older than cutoff
+                if pub_time < cutoff_time:
+                    print(f"    Skipping old: {headline[:50]} ({pub_time})", file=sys.stderr)
+                    continue
                 
                 article = {
                     "source": "American Banker",
-                    "headline": article_data["headline"][:150],
-                    "summary": f"Article from American Banker - {article_data['headline'][:100]}",
-                    "url": article_data["url"],
+                    "headline": headline[:200],
+                    "summary": f"Article from American Banker: {headline[:150]}",
+                    "url": url,
                     "published": pub_time.isoformat(),
                     "description": "American Banker"
                 }
                 articles.append(article)
+                print(f"    ✓ Captured: {headline[:60]}...", file=sys.stderr)
             
             except Exception as e:
-                print(f"    Error parsing American Banker article: {e}", file=sys.stderr)
+                print(f"    Error parsing article: {e}", file=sys.stderr)
                 continue
         
         if articles:
-            print(f"    ✓ Found {len(articles)} articles", file=sys.stderr)
+            print(f"    ✓ Found {len(articles)} recent articles", file=sys.stderr)
         else:
             print(f"    ⚠️  No recent articles found", file=sys.stderr)
         
         return articles
     
+    except ImportError:
+        print(f"  ❌ BeautifulSoup not installed. Add to requirements.txt", file=sys.stderr)
+        return []
     except Exception as e:
         print(f"  ❌ Error scraping American Banker: {e}", file=sys.stderr)
         return []
