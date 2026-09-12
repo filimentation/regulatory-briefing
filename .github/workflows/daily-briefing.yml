@@ -31,8 +31,9 @@ jobs:
       - name: Generate briefing
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          KAGI_API_KEY: ${{ secrets.KAGI_API_KEY }}
         run: python scripts/generate_briefing.py
-      
+        
       - name: Commit and push
         run: |
           git config --local user.email "action@github.com"
