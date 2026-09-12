@@ -25,19 +25,19 @@ KAGI_API_URL = "https://kagi.com/api/v1/search"
 # News sources - Kagi will search for these
 NEWS_SOURCES = {
     "CFPB": {
-        "query": "consumerfinance.gov",
+        "query": "site:consumerfinance.gov news",
         "name": "Consumer Financial Protection Bureau"
     },
     "FDIC": {
-        "query": "fdic",
+        "query": "site:fdic.gov news",
         "name": "Federal Deposit Insurance Corporation"
     },
     "Federal Reserve": {
-        "query": "federal reserve",
+        "query": "site:federalreserve.gov news",
         "name": "Federal Reserve"
     },
     "American Banker": {
-        "query": "american banker",
+        "query": "site:americanbanker.com news",
         "name": "American Banker"
     }
 }
@@ -51,24 +51,21 @@ def fetch_news_kagi(max_articles=15, hours_back=24):
         print("ERROR: KAGI_API_KEY environment variable not set", file=sys.stderr)
         return []
     
-    headers = {
-        "Authorization": f"Bearer {KAGI_API_KEY}",
-        "Content-Type": "application/json"
-    }
-    
     for source_name, source_config in NEWS_SOURCES.items():
         try:
             print(f"  Searching {source_name}...", file=sys.stderr)
             
-            # Build Kagi search query
-            query = source_config["query"]
-            
             payload = {
-                "query": query,
-                "workflow": "news"
+                "query": source_config["query"],
+                "workflow": "news",
             }
             
-            response = requests.post(KAGI_API_URL, headers=headers, json=payload, timeout=10)
+            headers = {
+                "Content-Type": "application/json",
+                "Authorization": f"Bearer {KAGI_API_KEY}",
+            }
+            
+            response = requests.post("https://kagi.com/api/v1/search", json=payload, headers=headers, timeout=10)
             response.raise_for_status()
             
             results = response.json()
