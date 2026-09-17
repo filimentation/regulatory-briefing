@@ -17,7 +17,7 @@ KAGI_API_KEY = os.getenv("KAGI_API_KEY")
 KAGI_API_URL = "https://kagi.com/api/v1/search"
 
 NEWS_SOURCES = {
-    "CFPB": {"query": "consumerfinance news", "name": "Consumer Financial Protection Bureau"},
+    "CFPB": {"query": "Consumer Financial Protection Bureau news", "name": "Consumer Financial Protection Bureau"},
     "FDIC": {"query": "fdic news", "name": "Federal Deposit Insurance Corporation"},
     "Federal Reserve": {"query": "federalreserve news", "name": "Federal Reserve"},
     "American Banker": {"query": "americanbanker news", "name": "American Banker"},
