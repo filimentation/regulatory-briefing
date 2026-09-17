@@ -146,10 +146,12 @@ def fetch_news_kagi(max_articles=15, hours_back=24):
 
 def generate_eli15_summary(article):
     client = Anthropic(api_key=ANTHROPIC_API_KEY)
-    prompt = f'''You are writing a financial news briefing for banking professionals.
-Explain this regulatory/banking news at an ELI15 level (explain like I'm 15).
-Use plain language, explain why it matters, flag business impact, and define jargon.
-Keep each section to 2-3 sentences maximum.
+    prompt = f'''You are writing a regulatory/banking news briefing for CISO- and CIO-level executives at a bank.
+Assume deep familiarity with banking, IT, and cybersecurity concepts — do not define standard jargon (e.g., MFA, third-party risk, exam cycles, safety-and-soundness).
+Write with the density and tone of a peer briefing, not an explainer: focus on what changed, why it's material, and what a security/technology leader should actually do or watch for.
+Flag specific operational, compliance, budget, or examiner-facing implications where relevant — not generic "this could matter" statements.
+If the news has second-order effects (e.g., on vendor contracts, exam prep, board reporting, incident response posture), call them out explicitly.
+Keep each section to 2-4 sentences — concise, but dense with substance rather than simplified.
 
 Article headline: {article['headline']}
 Article source: {article['source']}
