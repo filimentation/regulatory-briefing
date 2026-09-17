@@ -166,7 +166,7 @@ def fetch_news_kagi(max_articles=20, hours_back=24):
                         {
                             "source": source_name,
                             "headline": headline[:200],
-                            "summary": (summary or headline)[:500],
+                            "summary": (summary or headline)[:1000],
                             "url": url,
                             "published": pub_time.isoformat(),
                             "description": source_config["name"],
@@ -232,7 +232,7 @@ def fallback_briefing_items(articles):
                     articles.index(article),
                 ],
                 "headline": article["headline"],
-                "what_happened": article["summary"][:500],
+                "what_happened": article["summary"][:1000],
                 "why_it_matters": "Review the original article for regulatory and operational implications.",
                 "business_impact": "Review required.",
             }
@@ -283,7 +283,8 @@ Writing requirements:
 - Identify specific operational, compliance, budget, examiner-facing, vendor,
   board-reporting, or incident-response implications where relevant.
 - Avoid generic statements such as "this could be important."
-- Use a concise, dense peer-briefing tone.
+- Use a detailed executive-briefing tone with enough specificity for a CISO/CIO
+  audience; do not over-compress the analysis.
 - Do not use the terms "ELI5" or "ELI15."
 
 Return ONLY valid JSON using exactly this structure:
@@ -293,9 +294,9 @@ Return ONLY valid JSON using exactly this structure:
     {{
       "article_indices": [0, 3],
       "headline": "Concise combined headline",
-      "what_happened": "Two to four sentences describing what changed.",
-      "why_it_matters": "Two to four sentences explaining specific banking, compliance, security, or technology implications.",
-      "business_impact": "One concise sentence describing the business impact."
+      "what_happened": "Two to four sentences describing what changed, who acted, and the relevant scope or timing.",
+      "why_it_matters": "Four to six sentences explaining specific banking, compliance, security, technology, examiner-facing, vendor, board-reporting, or incident-response implications.",
+      "business_impact": "One to two sentences describing the concrete business impact."
     }}
   ]
 }}
@@ -310,7 +311,7 @@ Articles:
 
         message = client.messages.create(
             model="claude-opus-4-6",
-            max_tokens=4000,
+            max_tokens=6000,
             messages=[
                 {
                     "role": "user",
