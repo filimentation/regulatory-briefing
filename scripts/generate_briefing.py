@@ -278,13 +278,17 @@ Writing requirements:
 - Assume the reader is familiar with banking, IT, cybersecurity, compliance,
   third-party risk, exam cycles, and safety-and-soundness.
 - Do not define standard industry jargon.
-- Focus on what changed, why it is material, and what a security or technology
-  leader should do or monitor.
-- Identify specific operational, compliance, budget, examiner-facing, vendor,
-  board-reporting, or incident-response implications where relevant.
-- Avoid generic statements such as "this could be important."
-- Use a detailed executive-briefing tone with enough specificity for a CISO/CIO
-  audience; do not over-compress the analysis.
+- Write in a polished, board-ready memo style that is concise, specific, and
+  decision-relevant.
+- Focus on what changed, why it matters now, and what operational or strategic
+  decisions the issue may require.
+- Highlight concrete implications for compliance, security, technology planning,
+  budget allocation, examiner expectations, vendor oversight, board reporting,
+  or incident response.
+- Avoid generic commentary and avoid language that reads like marketing
+  or a news brief.
+- Keep the tone executive and analytical, with enough depth to inform action
+  without drifting into narrative detail.
 - Do not use the terms "ELI5" or "ELI15."
 
 Return ONLY valid JSON using exactly this structure:
@@ -293,10 +297,10 @@ Return ONLY valid JSON using exactly this structure:
   "items": [
     {{
       "article_indices": [0, 3],
-      "headline": "Concise combined headline",
-      "what_happened": "Two to four sentences describing what changed, who acted, and the relevant scope or timing.",
-      "why_it_matters": "Four to six sentences explaining specific banking, compliance, security, technology, examiner-facing, vendor, board-reporting, or incident-response implications.",
-      "business_impact": "One to two sentences describing the concrete business impact."
+      "headline": "Short, precise combined headline",
+      "what_happened": "Two to four sentences describing what changed, which agency or institution acted, and the relevant scope or timing.",
+      "why_it_matters": "Four to six sentences explaining the operational, compliance, security, technology, board, or regulatory significance and why the issue should be elevated now.",
+      "business_impact": "One to two sentences describing the concrete business, operational, or strategic impact."
     }}
   ]
 }}
