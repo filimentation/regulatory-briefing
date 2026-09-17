@@ -21,6 +21,7 @@ NEWS_SOURCES = {
     "FDIC": {"query": "fdic news", "name": "Federal Deposit Insurance Corporation"},
     "Federal Reserve": {"query": "federalreserve news", "name": "Federal Reserve"},
     "American Banker": {"query": "americanbanker news", "name": "American Banker"},
+    "OCC": {"query": "Office of the Comptroller of the Currency news", "name": "Office of the Comptroller of the Currency"},
 }
 
 
@@ -174,7 +175,7 @@ def create_markdown_briefing(articles, summaries):
     content = f"# Regulatory Briefing - {now.strftime('%B %d, %Y')}\n\n**Generated:** {now.strftime('%I:%M %p %Z')}\n\n---\n\n"
     for article, summary in zip(articles, summaries):
         published = datetime.fromisoformat(article["published"]).strftime("%b %d, %I:%M %p %Z")
-        content += f"## {article['source']}: {article['headline']}\n\n**Published:** {published}\n\n**What happened:** {summary.get('what_happened', 'N/A')}\n\n**Why it matters:** {summary.get('why_it_matters', 'N/A')}\n\n**Business impact:** {summary.get('business_impact', 'Review required')}\n\n**Read more:** [{article['source']} article]({article['url']})\n\n---\n\n"
+        content += f"## {article['source']}: {article['headline']}\n\n**Published:** {published}\n\n**What happened:** {summary.get('what_happened', 'N/A')}\n\n**Why it matters:** {summary.get('why_it_matters', 'N/A')}\n\n**Business impact:** {summary.get('business_impact', 'N/A')}\n\n**Read more:** [{article['source']} article]({article['url']})\n\n---\n\n"
     sources = ", ".join(sorted({article["source"] for article in articles}))
     content += f"## Summary\n\n- **Total items:** {len(articles)}\n- **Sources:** {sources}\n- **Generated:** {datetime.now(timezone.utc).isoformat()}\n"
     briefing_file = BRIEFING_DIR / f"{today}.md"
