@@ -26,19 +26,19 @@ KAGI_API_URL = "https://kagi.com/api/v1/search"
 NEWS_SOURCES = {
     "CFPB": {
         "query": "consumerfinance news",
-        "name": "Consumer Financial Protection Bureau"
+       # "name": "Consumer Financial Protection Bureau"
     },
     "FDIC": {
         "query": "fdic news",
-        "name": "Federal Deposit Insurance Corporation"
+    # "name": "Federal Deposit Insurance Corporation"
     },
     "Federal Reserve": {
         "query": "federalreserve news",
-        "name": "Federal Reserve"
+    # "name": "Federal Reserve"
     },
     "American Banker": {
         "query": "americanbanker news",
-        "name": "American Banker"
+    # "name": "American Banker"
     }
 }
 
