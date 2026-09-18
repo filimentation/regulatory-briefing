@@ -38,6 +38,10 @@ NEWS_SOURCES = {
         "query": "Office of the Comptroller of the Currency news",
         "name": "Office of the Comptroller of the Currency",
     },
+    "Nebraska Bankers Association": {
+        "query": "Nebraska Bankers Association news",
+        "name": "Nebraska Bankers Association",
+    },
 }
 
 
