@@ -27,8 +27,24 @@ NEWS_SOURCES = {
         "name": "Federal Deposit Insurance Corporation",
     },
     "Federal Reserve": {
-        "query": "federalreserve news",
+        "query": "Federal Reserve news",
         "name": "Federal Reserve",
+    },
+    "The Financial Brand": {
+        "query": "The Financial Brand news",
+        "name": "The Financial Brand",
+    },
+    "Disruption Banking": {
+        "query": "Disruption Banking news",
+        "name": "Disruption Banking",
+    },
+    "Independent Banker": {
+        "query": "Independent Banker news",
+        "name": "Independent Banker",
+    },
+    "Kansas City Fed": {
+        "query": "Kansas City Fed news",
+        "name": "Kansas City Fed",
     },
     "American Banker": {
         "query": "americanbanker news",
