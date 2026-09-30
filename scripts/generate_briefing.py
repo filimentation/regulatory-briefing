@@ -588,7 +588,7 @@ def main():
         return 1
 
     print("Fetching regulatory news via Kagi...")
-    articles = fetch_news_kagi(max_articles=20)
+    articles = fetch_news_kagi(max_articles=40)
 
     if not articles:
         print("No articles found", file=sys.stderr)
