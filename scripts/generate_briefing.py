@@ -116,6 +116,9 @@ def fetch_news_kagi(max_articles=40, hours_back=24):
         "Authorization": f"Bearer {KAGI_API_KEY}",
     }
 
+    # Calculate results per source to reach max_articles target
+    results_per_source = max(1, max_articles // len(NEWS_SOURCES))
+
     for source_name, source_config in NEWS_SOURCES.items():
         try:
             print(f"  Searching {source_name}...", file=sys.stderr)
@@ -151,9 +154,8 @@ def fetch_news_kagi(max_articles=40, hours_back=24):
 
             print(f"    Found {len(search_results)} results", file=sys.stderr)
 
-            # Kagi currently returns several results per source. Five per
-            # source provides up to 25 candidates before the overall limit.
-            for result in search_results[:5]:
+            # Fetch up to results_per_source from each source to reach max_articles target
+            for result in search_results[:results_per_source]:
                 try:
                     headline = str(
                         result.get("title") or result.get("name") or ""
