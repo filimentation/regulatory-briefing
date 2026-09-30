@@ -102,7 +102,7 @@ def extract_results(payload):
     return []
 
 
-def fetch_news_kagi(max_articles=20, hours_back=24):
+def fetch_news_kagi(max_articles=40, hours_back=24):
     """Fetch recent news from all configured sources using the Kagi API."""
     all_articles = []
     cutoff_time = datetime.now(timezone.utc) - timedelta(hours=hours_back)
@@ -335,7 +335,7 @@ Articles:
 
         message = client.messages.create(
             model="claude-opus-4-6",
-            max_tokens=6000,
+            max_tokens=8000,
             messages=[
                 {
                     "role": "user",
