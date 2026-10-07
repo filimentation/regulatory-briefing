@@ -32,8 +32,41 @@ jobs:
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           KAGI_API_KEY: ${{ secrets.KAGI_API_KEY }}
-        run: python scripts/generate_briefing.py
-        
+        run: |
+          python scripts/generate_briefing.py 2>&1 | tee /tmp/briefing.log
+          
+      - name: Log generated briefing files
+        if: always()
+        run: |
+          echo "===== Briefing generation log (last 50 lines) ====="
+          if [ -f /tmp/briefing.log ]; then
+            tail -n 50 /tmp/briefing.log
+          else
+            echo "No briefing log found."
+          fi
+
+          echo ""
+          echo "===== Generated briefing files ====="
+          if [ -d briefings ]; then
+            FILECOUNT=$(find briefings -maxdepth 1 -type f -name '*.md' | wc -l)
+            echo "Total files: $FILECOUNT"
+            find briefings -maxdepth 1 -type f -name '*.md' -printf '%f\n' | sort
+          else
+            echo "No briefings directory found."
+          fi
+
+          echo ""
+          echo "===== Git status ====="
+          git status --short
+
+          echo ""
+          echo "===== Workflow summary ====="
+          if [ -d briefings ] && [ $(find briefings -maxdepth 1 -type f -name '*.md' | wc -l) -gt 0 ]; then
+            echo "✓ Briefing generation successful"
+          else
+            echo "✗ No briefing files generated"
+          fi
+          
       - name: Commit and push
         run: |
           git config --local user.email "action@github.com"
