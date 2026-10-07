@@ -266,10 +266,10 @@ def fallback_briefing_items(articles):
 def generate_briefing_items(articles):
     """
     Consolidate overlapping articles and write their briefing summaries in one
-    Claude request.
+    Claude request. Returns a tuple of (briefing_items, claude_success).
     """
     if not articles:
-        return []
+        return [], True
 
     article_list = "\n\n".join(
         (
@@ -331,6 +331,8 @@ Articles:
 
 {article_list}
 """
+
+    claude_success = True
 
     try:
         client = Anthropic(api_key=ANTHROPIC_API_KEY)
@@ -418,7 +420,7 @@ Articles:
                     }
                 )
 
-        return valid_items
+        return valid_items, claude_success
 
     except Exception as exc:
         print(
@@ -429,7 +431,8 @@ Articles:
             "Falling back to one unsummarized item per article.",
             file=sys.stderr,
         )
-        return fallback_briefing_items(articles)
+        claude_success = False
+        return fallback_briefing_items(articles), claude_success
 
 
 def build_consolidated_articles(articles, briefing_items):
@@ -469,14 +472,20 @@ def build_consolidated_articles(articles, briefing_items):
     return consolidated_articles, summaries
 
 
-def create_markdown_briefing(articles, summaries):
+def create_markdown_briefing(articles, summaries, kagi_success, claude_success):
     """Write the consolidated briefing as Markdown."""
     now = datetime.now()
     today = now.strftime("%Y-%m-%d")
 
+    # Determine data source and analysis engine status
+    data_sources = "Limited" if not kagi_success else "Kagi"
+    analysis_engine = "Limited" if not claude_success else "Anthropic Claude"
+
     content = (
         f"# Regulatory Briefing - {now.strftime('%B %d, %Y')}\n\n"
-        f"**Generated:** {now.strftime('%I:%M %p %Z')}\n\n"
+        f"**Generated:** {now.strftime('%I:%M %p %Z')}\n"
+        f"**Data Sources:** {data_sources}\n"
+        f"**Analysis Engine:** {analysis_engine}\n\n"
         "---\n\n"
     )
 
@@ -575,18 +584,24 @@ def generate_rss_feed():
 
 
 def main():
+    kagi_success = True
+    claude_success = True
+
     if not ANTHROPIC_API_KEY:
         print(
             "ERROR: ANTHROPIC_API_KEY environment variable not set",
             file=sys.stderr,
         )
-        return 1
+        claude_success = False
 
     if not KAGI_API_KEY:
         print(
             "ERROR: KAGI_API_KEY environment variable not set",
             file=sys.stderr,
         )
+        kagi_success = False
+
+    if not kagi_success or not ANTHROPIC_API_KEY:
         return 1
 
     print("Fetching regulatory news via Kagi...")
@@ -594,12 +609,13 @@ def main():
 
     if not articles:
         print("No articles found", file=sys.stderr)
+        kagi_success = False
         return 1
 
     print(f"Found {len(articles)} source articles")
     print("Consolidating coverage and generating briefing with Claude...")
 
-    briefing_items = generate_briefing_items(articles)
+    briefing_items, claude_success = generate_briefing_items(articles)
     consolidated_articles, summaries = build_consolidated_articles(
         articles,
         briefing_items,
@@ -609,7 +625,7 @@ def main():
         f"Created {len(consolidated_articles)} consolidated briefing items"
     )
 
-    create_markdown_briefing(consolidated_articles, summaries)
+    create_markdown_briefing(consolidated_articles, summaries, kagi_success, claude_success)
     generate_rss_feed()
 
     print("\nBriefing complete!")
