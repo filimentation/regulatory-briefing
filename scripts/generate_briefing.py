@@ -60,6 +60,92 @@ NEWS_SOURCES = {
     },
 }
 
+ROLE_CONFIGS = {
+    "CEO-PRESIDENT": {
+        "label": "CEO / President",
+        "file_suffix": "CEO-PRESIDENT",
+        "persona": "Chief Executive Officer (CEO) and President",
+        "instructions": (
+            "Focus on strategic business implications, competitive positioning, "
+            "regulatory developments, reputation and brand risk, customer and "
+            "market impacts, economic trends, growth opportunities, board-level "
+            "concerns, enterprise risk, and long-term organizational impact. "
+            "Emphasize why leadership should care and whether the issue requires "
+            "monitoring, discussion, or action. Do not repeat the article summary. "
+            "Keep the response to 1-3 concise sentences. Assume the audience is "
+            "focused on strategic decision-making rather than operational details."
+        ),
+        "fallback": (
+            "This development merits executive attention due to strategic, "
+            "reputational, or regulatory implications that could affect the bank's "
+            "positioning, operating model, or long-term priorities."
+        ),
+    },
+    "CONTROLLER": {
+        "label": "Controller Management Team",
+        "file_suffix": "CONTROLLER",
+        "persona": "Controller Management Team",
+        "instructions": (
+            "Focus on Call Report implications, accounting and financial reporting "
+            "impacts, regulatory reporting requirements, audit and examination "
+            "readiness, financial controls and governance, policy and procedure "
+            "changes, capital and balance sheet reporting, operational impacts to "
+            "accounting and finance functions, and emerging regulatory requirements. "
+            "Highlight anything that may require additional analysis, monitoring, "
+            "documentation, reporting, or process changes. Do not repeat the article "
+            "summary. Keep the response to 1-3 concise sentences. Assume the audience "
+            "consists of banking accounting and finance leaders."
+        ),
+        "fallback": (
+            "This issue likely warrants finance and control team review for any reporting, "
+            "documentation, or policy implications that could affect readiness, "
+            "governance, or examination posture."
+        ),
+    },
+    "CFO": {
+        "label": "Chief Financial Officer",
+        "file_suffix": "CFO",
+        "persona": "Chief Financial Officer (CFO)",
+        "instructions": (
+            "Focus on earnings and profitability, interest rate risk, liquidity and "
+            "funding, capital planning and capital ratios, regulatory changes, strategic "
+            "planning, mergers and acquisitions, financial performance trends, and "
+            "material operational or compliance risks that could impact financial results. "
+            "Highlight any potential financial, regulatory, or strategic implications the "
+            "CFO should monitor. Do not repeat the article summary. Keep the response to "
+            "1-3 concise sentences. Assume the reader has extensive banking and "
+            "financial expertise."
+        ),
+        "fallback": (
+            "This development deserves financial review because it may affect earnings, "
+            "capital planning, liquidity, or strategic decisions that influence the bank's "
+            "financial outlook."
+        ),
+    },
+    "CIO-CISO": {
+        "label": "Chief Information Officer / Chief Information Security Officer",
+        "file_suffix": "CIO-CISO",
+        "persona": "Chief Information Officer (CIO) and Chief Information Security Officer (CISO)",
+        "instructions": (
+            "Focus on cybersecurity threats and trends, technology risk, third-party and "
+            "vendor risk, regulatory expectations related to information security, data "
+            "protection and privacy requirements, operational resilience and business "
+            "continuity, infrastructure and architecture concerns, emerging technologies, "
+            "AI, cloud, and digital banking, fraud prevention, and potential impacts to "
+            "security operations. Identify any risks, controls, monitoring activities, or "
+            "technology considerations that should be evaluated. Do not repeat the article "
+            "summary. Keep the response to 1-3 concise sentences. Assume the audience "
+            "consists of senior technology and cybersecurity leaders within a regulated "
+            "financial institution."
+        ),
+        "fallback": (
+            "This issue should be reviewed for cybersecurity, technology, vendor, or "
+            "operational resilience implications that could require additional controls, "
+            "monitoring, or governance attention."
+        ),
+    },
+}
+
 
 def parse_published_time(result):
     """Read any publication field Kagi provides, normalizing it to UTC."""
@@ -116,7 +202,6 @@ def fetch_news_kagi(max_articles=40, hours_back=24):
         "Authorization": f"Bearer {KAGI_API_KEY}",
     }
 
-    # Calculate results per source to reach max_articles target
     results_per_source = max(1, max_articles // len(NEWS_SOURCES))
 
     for source_name, source_config in NEWS_SOURCES.items():
@@ -154,7 +239,6 @@ def fetch_news_kagi(max_articles=40, hours_back=24):
 
             print(f"    Found {len(search_results)} results", file=sys.stderr)
 
-            # Fetch up to results_per_source from each source to reach max_articles target
             for result in search_results[:results_per_source]:
                 try:
                     headline = str(
@@ -222,10 +306,7 @@ def fetch_news_kagi(max_articles=40, hours_back=24):
                 file=sys.stderr,
             )
 
-    all_articles.sort(
-        key=lambda article: article["published"],
-        reverse=True,
-    )
+    all_articles.sort(key=lambda article: article["published"], reverse=True)
 
     unique_articles = []
     seen_urls = set()
@@ -250,9 +331,7 @@ def fallback_briefing_items(articles):
     for article in articles:
         items.append(
             {
-                "article_indices": [
-                    articles.index(article),
-                ],
+                "article_indices": [articles.index(article)],
                 "headline": article["headline"],
                 "what_happened": article["summary"][:1000],
                 "why_it_matters": "Review the original article for regulatory and operational implications.",
@@ -266,7 +345,7 @@ def fallback_briefing_items(articles):
 def generate_briefing_items(articles):
     """
     Consolidate overlapping articles and write their briefing summaries in one
-    Claude request. Returns a tuple of (briefing_items, claude_success).
+    Claude request.
     """
     if not articles:
         return [], True
@@ -285,32 +364,20 @@ def generate_briefing_items(articles):
 
     prompt = f"""You are producing a daily banking regulatory news briefing for CISO- and CIO-level executives at a bank.
 
-Review the articles below and group together articles that cover the same
-underlying event, announcement, rule, enforcement action, speech, or
-regulatory development.
+Review the articles below and group together articles that cover the same underlying event, announcement, rule, enforcement action, speech, or regulatory development.
 
-Only combine articles when they clearly describe the same underlying story.
-Do not combine articles merely because they concern the same regulator,
-subject, or general theme.
+Only combine articles when they clearly describe the same underlying story. Do not combine articles merely because they concern the same regulator, subject, or general theme.
 
-For each group, produce one briefing item. Every article index must appear
-exactly once in exactly one group.
+For each group, produce one briefing item. Every article index must appear exactly once in exactly one group.
 
 Writing requirements:
-- Assume the reader is familiar with banking, IT, cybersecurity, compliance,
-  third-party risk, exam cycles, and safety-and-soundness.
+- Assume the reader is familiar with banking, IT, cybersecurity, compliance, third-party risk, exam cycles, and safety-and-soundness.
 - Do not define standard industry jargon.
-- Write in a polished, board-ready memo style that is concise, specific, and
-  decision-relevant.
-- Focus on what changed, why it matters now, and what operational or strategic
-  decisions the issue may require.
-- Highlight concrete implications for compliance, security, technology planning,
-  budget allocation, examiner expectations, vendor oversight, board reporting,
-  or incident response.
-- Avoid generic commentary and avoid language that reads like marketing
-  or a news brief.
-- Keep the tone executive and analytical, with enough depth to inform action
-  without drifting into narrative detail.
+- Write in a polished, board-ready memo style that is concise, specific, and decision-relevant.
+- Focus on what changed, why it matters now, and what operational or strategic decisions the issue may require.
+- Highlight concrete implications for compliance, security, technology planning, budget allocation, examiner expectations, vendor oversight, board reporting, or incident response.
+- Avoid generic commentary and avoid language that reads like marketing or a news brief.
+- Keep the tone executive and analytical, with enough depth to inform action without drifting into narrative detail.
 - Do not use the terms "ELI5" or "ELI15."
 
 Return ONLY valid JSON using exactly this structure:
@@ -340,12 +407,7 @@ Articles:
         message = client.messages.create(
             model="claude-opus-4-6",
             max_tokens=8000,
-            messages=[
-                {
-                    "role": "user",
-                    "content": prompt,
-                }
-            ],
+            messages=[{"role": "user", "content": prompt}],
         )
 
         text = (
@@ -406,8 +468,6 @@ Articles:
             )
             used_indices.update(indices)
 
-        # Ensure a malformed or incomplete Claude response does not silently
-        # discard articles.
         for index, article in enumerate(articles):
             if index not in used_indices:
                 valid_items.append(
@@ -452,12 +512,8 @@ def build_consolidated_articles(articles, briefing_items):
                 "headline": item["headline"],
                 "summary": item["what_happened"],
                 "url": source_articles[0]["url"],
-                "published": max(
-                    article["published"] for article in source_articles
-                ),
-                "related_urls": [
-                    article["url"] for article in source_articles
-                ],
+                "published": max(article["published"] for article in source_articles),
+                "related_urls": [article["url"] for article in source_articles],
             }
         )
 
@@ -477,7 +533,6 @@ def create_markdown_briefing(articles, summaries, kagi_success, claude_success):
     now = datetime.now()
     today = now.strftime("%Y-%m-%d")
 
-    # Determine data source and analysis engine status
     data_sources = "Limited" if not kagi_success else "Kagi"
     analysis_engine = "Limited" if not claude_success else "Anthropic Claude"
 
@@ -490,27 +545,22 @@ def create_markdown_briefing(articles, summaries, kagi_success, claude_success):
     )
 
     for article, summary in zip(articles, summaries):
-        published = datetime.fromisoformat(
-            article["published"]
-        ).strftime("%b %d, %I:%M %p %Z")
+        published = datetime.fromisoformat(article["published"]).strftime(
+            "%b %d, %I:%M %p %Z"
+        )
 
         content += (
             f"## {article['source']}: {article['headline']}\n\n"
             f"**Published:** {published}\n\n"
-            f"**What happened:** "
-            f"{summary.get('what_happened', 'N/A')}\n\n"
-            f"**Why it matters:** "
-            f"{summary.get('why_it_matters', 'N/A')}\n\n"
-            f"**Business impact:** "
-            f"{summary.get('business_impact', 'N/A')}\n\n"
+            f"**What happened:** {summary.get('what_happened', 'N/A')}\n\n"
+            f"**Why it matters:** {summary.get('why_it_matters', 'N/A')}\n\n"
+            f"**Business impact:** {summary.get('business_impact', 'N/A')}\n\n"
         )
 
         related_urls = article.get("related_urls") or [article["url"]]
-
         content += "**Sources:**\n\n"
         for url in related_urls:
             content += f"- {url}\n"
-
         content += "\n---\n\n"
 
     sources = ", ".join(
@@ -535,6 +585,153 @@ def create_markdown_briefing(articles, summaries, kagi_success, claude_success):
     briefing_file.write_text(content, encoding="utf-8")
 
     print(f"Briefing written to {briefing_file}")
+    return briefing_file
+
+
+def build_role_prompt(role_key, role_config, articles):
+    """Build a role-specific prompt for a set of consolidated articles."""
+    article_list = "\n\n".join(
+        (
+            f"ARTICLE INDEX: {index}\n"
+            f"HEADLINE: {article['headline']}\n"
+            f"SOURCE: {article['source']}\n"
+            f"PUBLISHED: {article['published']}\n"
+            f"SUMMARY: {article['summary']}\n"
+            f"URL: {article['url']}"
+        )
+        for index, article in enumerate(articles)
+    )
+
+    prompt = f"""You are writing for the {role_config['persona']} of Union Bank & Trust Company, a community financial institution headquartered in Lincoln, Nebraska.
+
+For each news article, write a "Why it Matters" section from the {role_config['label']} perspective.
+
+Follow these requirements:
+{role_config['instructions']}
+
+Return ONLY valid JSON with this structure:
+{{
+  "items": [
+    {{
+      "article_index": 0,
+      "why_it_matters": "1-3 concise sentences that explain why this matters to this role."
+    }}
+  ]
+}}
+
+Use article_index values that correspond to the ARTICLE INDEX values below.
+Do not invent new article_index values.
+Do not repeat the article summary. Keep each response concise and decision-focused.
+
+Articles:
+
+{article_list}
+"""
+    return prompt
+
+
+def generate_role_briefings(articles, role_configs, claude_success):
+    """Return per-role why-it-matters text keyed by article index."""
+    outputs = {}
+
+    for role_key, role_config in role_configs.items():
+        by_index = {}
+
+        if claude_success:
+            try:
+                prompt = build_role_prompt(role_key, role_config, articles)
+                client = Anthropic(api_key=ANTHROPIC_API_KEY)
+                message = client.messages.create(
+                    model="claude-opus-4-6",
+                    max_tokens=8000,
+                    messages=[{"role": "user", "content": prompt}],
+                )
+                text = (
+                    message.content[0].text
+                    .replace("```json", "")
+                    .replace("```", "")
+                    .strip()
+                )
+                response = json.loads(text)
+                generated_items = response.get("items", [])
+
+                if isinstance(generated_items, list):
+                    for item in generated_items:
+                        if not isinstance(item, dict):
+                            continue
+                        try:
+                            index = int(item.get("article_index"))
+                        except (TypeError, ValueError):
+                            continue
+                        if 0 <= index < len(articles):
+                            value = str(item.get("why_it_matters") or "").strip()
+                            if value:
+                                by_index[index] = value
+
+            except Exception as exc:
+                print(
+                    f"Error generating {role_key} role briefing: {exc}",
+                    file=sys.stderr,
+                )
+                claude_success = False
+
+        if not claude_success:
+            for index, article in enumerate(articles):
+                by_index[index] = role_config["fallback"].format(
+                    article_title=article["headline"],
+                    source=article["source"],
+                )
+
+        outputs[role_key] = by_index
+
+    return outputs
+
+
+def create_role_markdown_briefing(role_key, role_config, articles, role_why, kagi_success, claude_success):
+    """Write a role-specific briefing file."""
+    now = datetime.now()
+    today = now.strftime("%Y-%m-%d")
+    data_sources = "Limited" if not kagi_success else "Kagi"
+    analysis_engine = "Limited" if not claude_success else "Anthropic Claude"
+
+    content = (
+        f"# Regulatory Briefing - {now.strftime('%B %d, %Y')} | {role_config['label']}\n\n"
+        f"**Generated:** {now.strftime('%I:%M %p %Z')}\n"
+        f"**Data Sources:** {data_sources}\n"
+        f"**Analysis Engine:** {analysis_engine}\n\n"
+        "---\n\n"
+    )
+
+    for index, article in enumerate(articles):
+        published = datetime.fromisoformat(article["published"]).strftime(
+            "%b %d, %I:%M %p %Z"
+        )
+        why_it_matters = role_why.get(index, role_config["fallback"])
+
+        content += (
+            f"## {article['source']}: {article['headline']}\n\n"
+            f"**Published:** {published}\n\n"
+            f"**Why it matters:** {why_it_matters}\n\n"
+        )
+
+        related_urls = article.get("related_urls") or [article["url"]]
+        content += "**Sources:**\n\n"
+        for url in related_urls:
+            content += f"- {url}\n"
+        content += "\n---\n\n"
+
+    content += (
+        "## Summary\n\n"
+        f"- **Role:** {role_config['label']}\n"
+        f"- **Total items:** {len(articles)}\n"
+        f"- **Generated:** {datetime.now(timezone.utc).isoformat()}\n"
+    )
+
+    briefing_file = BRIEFING_DIR / f"{today}.{role_config['file_suffix']}.md"
+    briefing_file.parent.mkdir(parents=True, exist_ok=True)
+    briefing_file.write_text(content, encoding="utf-8")
+
+    print(f"Role briefing written to {briefing_file}")
     return briefing_file
 
 
@@ -569,7 +766,7 @@ def generate_rss_feed():
             briefing_file.read_text(encoding="utf-8")[:500] + "..."
         )
         ET.SubElement(item, "pubDate").text = datetime.strptime(
-            date_str,
+            date_str.split(".")[-1] if "." in date_str else date_str,
             "%Y-%m-%d",
         ).strftime("%a, %d %b %Y 06:00:00 +0000")
         ET.SubElement(item, "guid").text = f"briefing-{date_str}"
@@ -587,29 +784,25 @@ def main():
     kagi_success = True
     claude_success = True
 
-    if not ANTHROPIC_API_KEY:
-        print(
-            "ERROR: ANTHROPIC_API_KEY environment variable not set",
-            file=sys.stderr,
-        )
-        claude_success = False
-
     if not KAGI_API_KEY:
         print(
             "ERROR: KAGI_API_KEY environment variable not set",
             file=sys.stderr,
         )
-        kagi_success = False
-
-    if not kagi_success or not ANTHROPIC_API_KEY:
         return 1
+
+    if not ANTHROPIC_API_KEY:
+        print(
+            "WARNING: ANTHROPIC_API_KEY environment variable not set; role briefings will be generated in limited mode.",
+            file=sys.stderr,
+        )
+        claude_success = False
 
     print("Fetching regulatory news via Kagi...")
     articles = fetch_news_kagi(max_articles=40)
 
     if not articles:
         print("No articles found", file=sys.stderr)
-        kagi_success = False
         return 1
 
     print(f"Found {len(articles)} source articles")
@@ -621,13 +814,26 @@ def main():
         briefing_items,
     )
 
-    print(
-        f"Created {len(consolidated_articles)} consolidated briefing items"
-    )
+    print(f"Created {len(consolidated_articles)} consolidated briefing items")
 
     create_markdown_briefing(consolidated_articles, summaries, kagi_success, claude_success)
-    generate_rss_feed()
+    role_why_by_role = generate_role_briefings(
+        consolidated_articles,
+        ROLE_CONFIGS,
+        claude_success,
+    )
 
+    for role_key, role_config in ROLE_CONFIGS.items():
+        create_role_markdown_briefing(
+            role_key,
+            role_config,
+            consolidated_articles,
+            role_why_by_role.get(role_key, {}),
+            kagi_success,
+            claude_success,
+        )
+
+    generate_rss_feed()
     print("\nBriefing complete!")
     return 0
 
