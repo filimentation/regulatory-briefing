@@ -604,7 +604,9 @@ def build_role_prompt(role_key, role_config, articles):
 
     prompt = f"""You are writing for the {role_config['persona']} of Union Bank & Trust Company, a community financial institution headquartered in Lincoln, Nebraska.
 
-For each news article, write a "Why it Matters" section from the {role_config['label']} perspective.
+For each news article, write two role-specific sections from the {role_config['label']} perspective:
+1) a "Why it Matters" section
+2) a "Business Impact" section
 
 Follow these requirements:
 {role_config['instructions']}
@@ -614,7 +616,8 @@ Return ONLY valid JSON with this structure:
   "items": [
     {{
       "article_index": 0,
-      "why_it_matters": "1-3 concise sentences that explain why this matters to this role."
+      "why_it_matters": "1-3 concise sentences that explain why this matters to this role.",
+      "business_impact": "1-2 concise sentences describing the concrete business, operational, or strategic impact to this role."
     }}
   ]
 }}
@@ -631,7 +634,7 @@ Articles:
 
 
 def generate_role_briefings(articles, role_configs, claude_success):
-    """Return per-role why-it-matters text keyed by article index."""
+    """Return per-role why-it-matters and business-impact text keyed by article index."""
     outputs = {}
 
     for role_key, role_config in role_configs.items():
@@ -664,9 +667,13 @@ def generate_role_briefings(articles, role_configs, claude_success):
                         except (TypeError, ValueError):
                             continue
                         if 0 <= index < len(articles):
-                            value = str(item.get("why_it_matters") or "").strip()
-                            if value:
-                                by_index[index] = value
+                            why = str(item.get("why_it_matters") or "").strip()
+                            impact = str(item.get("business_impact") or "").strip()
+                            if why or impact:
+                                by_index[index] = {
+                                    "why_it_matters": why or role_config["fallback"],
+                                    "business_impact": impact or "This issue requires role-specific review and follow-up.",
+                                }
 
             except Exception as exc:
                 print(
@@ -677,18 +684,24 @@ def generate_role_briefings(articles, role_configs, claude_success):
 
         if not claude_success:
             for index, article in enumerate(articles):
-                by_index[index] = role_config["fallback"].format(
-                    article_title=article["headline"],
-                    source=article["source"],
-                )
+                by_index[index] = {
+                    "why_it_matters": role_config["fallback"].format(
+                        article_title=article["headline"],
+                        source=article["source"],
+                    ),
+                    "business_impact": (
+                        "This issue should be reviewed in the context of this role's "
+                        "operating priorities, risk appetite, and governance responsibilities."
+                    ),
+                }
 
         outputs[role_key] = by_index
 
     return outputs
 
 
-def create_role_markdown_briefing(role_key, role_config, articles, role_why, kagi_success, claude_success):
-    """Write a role-specific briefing file."""
+def create_role_markdown_briefing(role_key, role_config, articles, summaries, role_why, kagi_success, claude_success):
+    """Write a role-specific briefing file with all three sections preserved."""
     now = datetime.now()
     today = now.strftime("%Y-%m-%d")
     data_sources = "Limited" if not kagi_success else "Kagi"
@@ -706,12 +719,17 @@ def create_role_markdown_briefing(role_key, role_config, articles, role_why, kag
         published = datetime.fromisoformat(article["published"]).strftime(
             "%b %d, %I:%M %p %Z"
         )
-        why_it_matters = role_why.get(index, role_config["fallback"])
+        summary = summaries[index] if index < len(summaries) else {}
+        role_text = role_why.get(index, {})
+        why_it_matters = role_text.get("why_it_matters", role_config["fallback"])
+        role_impact = role_text.get("business_impact", summary.get("business_impact", "Review required."))
 
         content += (
             f"## {article['source']}: {article['headline']}\n\n"
             f"**Published:** {published}\n\n"
+            f"**What happened:** {summary.get('what_happened', 'N/A')}\n\n"
             f"**Why it matters:** {why_it_matters}\n\n"
+            f"**Business impact:** {role_impact}\n\n"
         )
 
         related_urls = article.get("related_urls") or [article["url"]]
@@ -828,6 +846,7 @@ def main():
             role_key,
             role_config,
             consolidated_articles,
+            summaries,
             role_why_by_role.get(role_key, {}),
             kagi_success,
             claude_success,
